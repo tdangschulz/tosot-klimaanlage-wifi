@@ -61,6 +61,11 @@ Standard-Zielnetz (im Skript / per Env/CLI überschreibbar):
 - `TARGET_SSID`
 - `TARGET_PSW`
 
+`.env` wird automatisch geladen (Standardpfad: `./.env`). Alternativ:
+
+- `ENV_FILE=/pfad/zur/datei.env ./tosot_wifi_reprovision.sh`
+- `ENV_FILE=/pfad/zur/datei.env sudo ./tosot_wifi_reprovision_pi.sh`
+
 Wichtige Laufzeitparameter:
 
 - `CHECK_INTERVAL` (Scan-Intervall, Default `60`)
@@ -77,6 +82,20 @@ Wichtige Laufzeitparameter:
 ```bash
 ./tosot_wifi_reprovision.sh --help
 ./tosot_wifi_reprovision_pi.sh --help
+```
+
+### Nutzung mit `.env` (empfohlen)
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Danach Werte in `.env` setzen und starten:
+
+```bash
+./tosot_wifi_reprovision.sh
+sudo ./tosot_wifi_reprovision_pi.sh
 ```
 
 ### Desktop/Server Linux (mit nmcli)

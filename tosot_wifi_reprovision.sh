@@ -1,16 +1,28 @@
 #!/bin/bash
 
+ENV_FILE="${ENV_FILE:-.env}"
+
+load_env_file() {
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$ENV_FILE"
+        set +a
+    fi
+}
+
+load_env_file
 
 # ==== Einmalige Ziel-WLAN-Definition (für alle GREE-APs) ====
-TARGET_SSID="${TARGET_SSID:-meinRouter}"
+TARGET_SSID="${TARGET_SSID:-}"
 TARGET_PSW="${TARGET_PSW:-}"
 
 
 # Configuration: Gree AP SSID → AP Password
 declare -A GREE_AP_PSW
-GREE_AP_PSW["c6982a76"]="12345678"
-GREE_AP_PSW["c699e6bf"]="12345678"
-GREE_AP_PSW["c699e72b"]="12345678"
+GREE_AP_PSW["c6982a76"]="${AP_PSW_C6982A76:-12345678}"
+GREE_AP_PSW["c699e6bf"]="${AP_PSW_C699E6BF:-12345678}"
+GREE_AP_PSW["c699e72b"]="${AP_PSW_C699E72B:-12345678}"
 
 # Optional labels: Gree AP SSID -> room name
 declare -A GREE_AP_LABEL
@@ -39,6 +51,7 @@ Usage:
 Description:
   Scans for configured Gree/Tosot AP SSIDs, connects, sends WLAN provisioning,
   and verifies success by checking AP visibility.
+  If present, values are auto-loaded from .env (or ENV_FILE).
 
 Options:
   -h, --help                      Show this help and exit
@@ -53,8 +66,12 @@ Options:
   --ap-ip-candidates "IP1 IP2"    AP IP fallback list (default: "192.168.1.1 192.168.0.1")
 
 Environment variables:
+  ENV_FILE
   TARGET_SSID
   TARGET_PSW
+  AP_PSW_C6982A76
+  AP_PSW_C699E6BF
+  AP_PSW_C699E72B
   CHECK_INTERVAL
   INITIAL_SEND_WAIT
   SEND_RETRIES
@@ -65,6 +82,7 @@ Environment variables:
 
 Examples:
   ./tosot_wifi_reprovision.sh --help
+  ENV_FILE=.env.prod ./tosot_wifi_reprovision.sh
   ./tosot_wifi_reprovision.sh --check-interval 90 --send-retries 15
   TARGET_SSID=MeinWLAN TARGET_PSW='secret' ./tosot_wifi_reprovision.sh
 EOF
@@ -368,6 +386,11 @@ echo "🚀 Gree AP WiFi Configurator v2.2 (App-like provisioning)"
 
 if [ -z "${TARGET_PSW:-}" ]; then
     echo "❌ TARGET_PSW is empty. Set it via --target-psw or env var TARGET_PSW."
+    exit 1
+fi
+
+if [ -z "${TARGET_SSID:-}" ]; then
+    echo "❌ TARGET_SSID is empty. Set it via --target-ssid or env var TARGET_SSID."
     exit 1
 fi
 
