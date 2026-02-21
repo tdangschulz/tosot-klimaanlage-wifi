@@ -3,7 +3,7 @@
 
 # ==== Einmalige Ziel-WLAN-Definition (für alle GREE-APs) ====
 TARGET_SSID="${TARGET_SSID:-meinRouter}"
-TARGET_PSW="${TARGET_PSW:-Y6h39U3B2a1F2d319!}"
+TARGET_PSW="${TARGET_PSW:-}"
 
 
 # Configuration: Gree AP SSID → AP Password
@@ -365,6 +365,12 @@ verify_provisioning_success() {
 # === MAIN INITIALIZATION ===
 parse_args "$@"
 echo "🚀 Gree AP WiFi Configurator v2.2 (App-like provisioning)"
+
+if [ -z "${TARGET_PSW:-}" ]; then
+    echo "❌ TARGET_PSW is empty. Set it via --target-psw or env var TARGET_PSW."
+    exit 1
+fi
+
 echo "📶 Target WiFi: $TARGET_SSID"
 echo "⏱️  Check interval: ${CHECK_INTERVAL}s"
 echo "----------------------------------------"

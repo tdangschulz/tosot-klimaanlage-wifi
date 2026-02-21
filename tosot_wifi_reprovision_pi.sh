@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 TARGET_SSID="${TARGET_SSID:-meinRouter}"
-TARGET_PSW="${TARGET_PSW:-Y6h39U3B2a1F2d319!}"
+TARGET_PSW="${TARGET_PSW:-}"
 
 # Gree/Tosot AP SSID -> AP password
 declare -A GREE_AP_PSW
@@ -305,6 +305,11 @@ parse_args "$@"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root: sudo ./tosot_wifi_reprovision_pi.sh"
+    exit 1
+fi
+
+if [ -z "${TARGET_PSW:-}" ]; then
+    echo "TARGET_PSW is empty. Set it via --target-psw or env var TARGET_PSW."
     exit 1
 fi
 
