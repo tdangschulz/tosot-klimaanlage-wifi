@@ -40,6 +40,8 @@ SEND_RETRIES="${SEND_RETRIES:-12}"               # send multiple times for flaky
 SEND_INTERVAL="${SEND_INTERVAL:-2}"              # seconds between sends
 VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"          # max seconds to wait for AP to disappear
 VERIFY_SCAN_INTERVAL="${VERIFY_SCAN_INTERVAL:-5}" # seconds between verification scans
+RECONNECT_ENABLED="${RECONNECT_ENABLED:-1}"      # reconnect to previous WiFi when no AP is visible
+RECONNECT_SSID="${RECONNECT_SSID:-}"             # optional explicit fallback WiFi SSID
 
 trap 'echo "🛑 Stopped."; exit 0' INT TERM
 
@@ -64,6 +66,8 @@ Options:
   --verify-timeout SEC            Max verification time (default: 120)
   --verify-scan-interval SEC      Verification rescan interval (default: 5)
   --ap-ip-candidates "IP1 IP2"    AP IP fallback list (default: "192.168.1.1 192.168.0.1")
+  --reconnect-ssid SSID           WiFi SSID to reconnect to when no AP is visible
+  --no-reconnect                  Disable reconnect behavior
 
 Environment variables:
   ENV_FILE
@@ -79,6 +83,8 @@ Environment variables:
   VERIFY_TIMEOUT
   VERIFY_SCAN_INTERVAL
   AP_IP_CANDIDATES
+  RECONNECT_ENABLED
+  RECONNECT_SSID
 
 Examples:
   ./tosot_wifi_reprovision.sh --help
@@ -131,6 +137,14 @@ parse_args() {
                 AP_IP_CANDIDATES=($2)
                 shift 2
                 ;;
+            --reconnect-ssid)
+                RECONNECT_SSID="$2"
+                shift 2
+                ;;
+            --no-reconnect)
+                RECONNECT_ENABLED=0
+                shift 1
+                ;;
             *)
                 echo "❌ Unknown option: $1"
                 echo
@@ -157,6 +171,39 @@ require_command() {
         echo "❌ Required command not found: $cmd"
         exit 1
     fi
+}
+
+is_gree_ap_ssid() {
+    local ssid="$1"
+    [ -n "${GREE_AP_PSW[$ssid]+x}" ]
+}
+
+reconnect_to_fallback_wifi() {
+    local fallback_ssid="$1"
+    local iface="$2"
+    local current_connection
+
+    if [ "${RECONNECT_ENABLED}" = "0" ]; then
+        return 0
+    fi
+
+    if [ -z "${fallback_ssid:-}" ]; then
+        echo ">>> ⚠️  Reconnect skipped: no fallback SSID configured"
+        return 1
+    fi
+
+    current_connection=$(nmcli -t -f DEVICE,STATE,CONNECTION dev status 2>/dev/null | awk -F: -v ifc="$iface" '$1==ifc {print $3; exit}')
+    current_connection=${current_connection:-none}
+    if [ "$current_connection" = "$fallback_ssid" ]; then
+        echo ">>> ✅ Already connected to fallback WiFi: $fallback_ssid"
+        return 0
+    fi
+
+    echo ">>> 🔁 Reconnecting to fallback WiFi: $fallback_ssid"
+    nmcli -w 30 con up id "$fallback_ssid" ifname "$iface" >/dev/null 2>&1 && return 0
+    nmcli -w 30 con up id "$fallback_ssid" >/dev/null 2>&1 && return 0
+    echo ">>> ⚠️  Reconnect to '$fallback_ssid' failed (profile missing or unavailable)"
+    return 1
 }
 
 detect_ap_ip() {
@@ -410,6 +457,23 @@ fi
 
 setup_wlan_interface "$WLAN_IFACE"
 echo "📶 Using WLAN: $WLAN_IFACE"
+
+if [ -z "${RECONNECT_SSID:-}" ]; then
+    initial_connection=$(nmcli -t -f DEVICE,STATE,CONNECTION dev status 2>/dev/null | awk -F: -v ifc="$WLAN_IFACE" '$1==ifc {print $3; exit}')
+    initial_connection=${initial_connection:-}
+    if [ -n "$initial_connection" ] && [ "$initial_connection" != "--" ] && ! is_gree_ap_ssid "$initial_connection"; then
+        RECONNECT_SSID="$initial_connection"
+    else
+        RECONNECT_SSID="$TARGET_SSID"
+    fi
+fi
+
+if [ "${RECONNECT_ENABLED}" = "1" ]; then
+    echo "🔁 Fallback WiFi for reconnect: $RECONNECT_SSID"
+else
+    echo "🔁 Fallback reconnect disabled"
+fi
+
 echo "----------------------------------------"
 
 while true; do
@@ -466,6 +530,7 @@ while true; do
 
     if [ "$found_ap" = false ]; then
         echo ">>> 😴 No Gree APs visible → Waiting..."
+        reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
     fi
 
     echo "----------------------------------------"

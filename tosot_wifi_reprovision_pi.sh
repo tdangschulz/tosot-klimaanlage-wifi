@@ -38,6 +38,8 @@ VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-120}"
 VERIFY_SCAN_INTERVAL="${VERIFY_SCAN_INTERVAL:-5}"
 CONNECT_TIMEOUT="${CONNECT_TIMEOUT:-60}"
 WLAN_IFACE="${WLAN_IFACE:-}"
+RECONNECT_ENABLED="${RECONNECT_ENABLED:-1}"
+RECONNECT_SSID="${RECONNECT_SSID:-}"
 
 trap 'echo "Stopped."; exit 0' INT TERM
 
@@ -64,12 +66,14 @@ Options:
   --verify-timeout SEC            Max verification time (default: 120)
   --verify-scan-interval SEC      Verification scan interval (default: 5)
   --ap-ip-candidates "IP1 IP2"    AP IP fallback list
+  --reconnect-ssid SSID           WiFi SSID to reconnect to when no AP is visible
+  --no-reconnect                  Disable reconnect behavior
 
 Environment variables:
   ENV_FILE TARGET_SSID TARGET_PSW AP_PSW_C6982A76 AP_PSW_C699E6BF
   AP_PSW_C699E72B CHECK_INTERVAL CONNECT_TIMEOUT INITIAL_SEND_WAIT
   SEND_RETRIES SEND_INTERVAL VERIFY_TIMEOUT VERIFY_SCAN_INTERVAL
-  AP_IP_CANDIDATES WLAN_IFACE
+  AP_IP_CANDIDATES WLAN_IFACE RECONNECT_ENABLED RECONNECT_SSID
 
 Important:
   Run as root on Raspberry Pi:
@@ -95,6 +99,8 @@ parse_args() {
             --verify-timeout) VERIFY_TIMEOUT="$2"; shift 2 ;;
             --verify-scan-interval) VERIFY_SCAN_INTERVAL="$2"; shift 2 ;;
             --ap-ip-candidates) AP_IP_CANDIDATES=($2); shift 2 ;;
+            --reconnect-ssid) RECONNECT_SSID="$2"; shift 2 ;;
+            --no-reconnect) RECONNECT_ENABLED=0; shift 1 ;;
             *)
                 echo "Unknown option: $1"
                 echo
@@ -121,6 +127,11 @@ ap_display_name() {
     else
         printf '%s' "$ap_ssid"
     fi
+}
+
+is_gree_ap_ssid() {
+    local ssid="$1"
+    [ -n "${GREE_AP_PSW[$ssid]+x}" ]
 }
 
 get_wlan_interface() {
@@ -316,6 +327,47 @@ verify_provisioning_success() {
     return 1
 }
 
+reconnect_to_fallback_wifi() {
+    local fallback_ssid="$1"
+    local current_ssid net_id
+
+    if [ "${RECONNECT_ENABLED}" = "0" ]; then
+        return 0
+    fi
+
+    if [ -z "${fallback_ssid:-}" ]; then
+        echo "Reconnect skipped: no fallback SSID configured."
+        return 1
+    fi
+
+    current_ssid=$(wpa status 2>/dev/null | awk -F= '/^ssid=/{print $2; exit}')
+    current_ssid=${current_ssid:-none}
+    if [ "$current_ssid" = "$fallback_ssid" ]; then
+        echo "Already connected to fallback WiFi: $fallback_ssid"
+        return 0
+    fi
+
+    echo "Reconnecting to fallback WiFi: $fallback_ssid"
+    net_id=$(wpa list_networks 2>/dev/null | awk -F'\t' -v s="$fallback_ssid" 'NR>1 && $2==s {print $1; exit}')
+    if [[ "$net_id" =~ ^[0-9]+$ ]]; then
+        wpa select_network "$net_id" >/dev/null 2>&1 || true
+        wpa enable_network "$net_id" >/dev/null 2>&1 || true
+        wpa reassociate >/dev/null 2>&1 || true
+        if check_connection_status "$fallback_ssid" 30; then
+            return 0
+        fi
+    fi
+
+    if [ "$fallback_ssid" = "$TARGET_SSID" ]; then
+        if connect_to_ap "$TARGET_SSID" "$TARGET_PSW" && check_connection_status "$TARGET_SSID" 30; then
+            return 0
+        fi
+    fi
+
+    echo "Reconnect to '$fallback_ssid' failed."
+    return 1
+}
+
 parse_args "$@"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -350,9 +402,24 @@ if ! ensure_wpa_ready; then
     exit 1
 fi
 
+if [ -z "${RECONNECT_SSID:-}" ]; then
+    initial_connection=$(wpa status 2>/dev/null | awk -F= '/^ssid=/{print $2; exit}')
+    initial_connection=${initial_connection:-}
+    if [ -n "$initial_connection" ] && ! is_gree_ap_ssid "$initial_connection"; then
+        RECONNECT_SSID="$initial_connection"
+    else
+        RECONNECT_SSID="$TARGET_SSID"
+    fi
+fi
+
 echo "Starting Tosot/Gree reprovision monitor (Raspberry Pi mode)"
 echo "WLAN interface: $WLAN_IFACE"
 echo "Target WiFi: $TARGET_SSID"
+if [ "${RECONNECT_ENABLED}" = "1" ]; then
+    echo "Fallback WiFi for reconnect: $RECONNECT_SSID"
+else
+    echo "Fallback reconnect disabled"
+fi
 echo "Scan interval: ${CHECK_INTERVAL}s"
 echo "--------------------------------------------------"
 
@@ -399,6 +466,7 @@ while true; do
 
     if [ "$found_ap" = false ]; then
         echo "No configured AP visible."
+        reconnect_to_fallback_wifi "$RECONNECT_SSID" || true
     fi
     echo "Sleeping ${CHECK_INTERVAL}s..."
     sleep "$CHECK_INTERVAL"

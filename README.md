@@ -27,6 +27,7 @@ AP-Passwort ist pro SSID im Skript konfigurierbar (`GREE_AP_PSW`).
 2. Bei Treffer wird Verbindung zum Klima-AP aufgebaut.
 3. Payload wird mehrfach per UDP an Port `7000` gesendet.
 4. Erfolg wird heuristisch geprüft: AP verschwindet anschließend (verlässt AP-Modus).
+5. Wenn kein Geräte-AP sichtbar ist, verbinden sich die Skripte optional zurück ins vorherige WLAN.
 
 ## Voraussetzungen
 
@@ -74,6 +75,8 @@ Wichtige Laufzeitparameter:
 - `INITIAL_SEND_WAIT` (Wartezeit nach AP-Connect)
 - `VERIFY_TIMEOUT` / `VERIFY_SCAN_INTERVAL` (Erfolgsprüfung)
 - `AP_IP_CANDIDATES` (Default `192.168.1.1 192.168.0.1`)
+- `RECONNECT_ENABLED` (beide Skripte, Default `1`)
+- `RECONNECT_SSID` (beide Skripte, optional feste Fallback-SSID)
 
 ## Nutzung
 
@@ -175,6 +178,12 @@ sudo journalctl -u tosot-wifi-reprovision.service -f
 - Geräte-SSID + AP-Passwort: in `GREE_AP_PSW`
 - Anzeigename pro Gerät: in `GREE_AP_LABEL`
 
-## Lizenz
 
-Private Nutzung / internes Projekt. Bei Bedarf ergänzen.
+### 2. AdGuard Home DNS Rewrites
+**Filters > Custom filtering rules:**
+
+```yaml
+||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.74
+||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.57
+||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.68
+``
