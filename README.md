@@ -10,6 +10,8 @@ Die Skripte suchen regelmäßig nach bekannten Geräte-APs (z. B. `c6982a76`), v
   - Für Linux-Systeme mit **NetworkManager** (`nmcli`)
 - `tosot_wifi_reprovision_pi.sh`
   - Für **Raspberry Pi OS ohne nmcli**, mit `wpa_cli`/`iw`
+- `tosot_wifi_reprovision.ps1`
+  - Für **Windows PowerShell** mit `netsh wlan`
 
 ## Unterstützte Geräte-APs
 
@@ -55,6 +57,15 @@ Benötigt:
 
 Hinweis: Pi-Skript als root starten (`sudo`), da WLAN-Steuerung sonst oft scheitert.
 
+### 3) `tosot_wifi_reprovision.ps1` (Windows)
+
+Benötigt:
+
+- Windows mit WLAN-Adapter
+- `powershell.exe` oder `pwsh`
+- `netsh wlan` verfügbar
+- Rechtesatz, der WLAN-Profile lesen/verbinden darf
+
 ## Konfiguration
 
 Standard-Zielnetz (im Skript / per Env/CLI überschreibbar):
@@ -87,6 +98,10 @@ Wichtige Laufzeitparameter:
 ./tosot_wifi_reprovision_pi.sh --help
 ```
 
+```powershell
+.\tosot_wifi_reprovision.ps1 -Help
+```
+
 ### Nutzung mit `.env` (empfohlen)
 
 ```bash
@@ -99,6 +114,10 @@ Danach Werte in `.env` setzen und starten:
 ```bash
 ./tosot_wifi_reprovision.sh
 sudo ./tosot_wifi_reprovision_pi.sh
+```
+
+```powershell
+.\tosot_wifi_reprovision.ps1
 ```
 
 ### Desktop/Server Linux (mit nmcli)
@@ -119,6 +138,16 @@ sudo ./tosot_wifi_reprovision_pi.sh \
   --target-psw "MeinPasswort" \
   --check-interval 60 \
   --send-retries 12
+```
+
+### Windows PowerShell
+
+```powershell
+.\tosot_wifi_reprovision.ps1 `
+  -TargetSsid "MeinWLAN" `
+  -TargetPsw "MeinPasswort" `
+  -CheckInterval 60 `
+  -SendRetries 12
 ```
 
 ## Autostart auf Raspberry Pi (systemd)
