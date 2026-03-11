@@ -261,7 +261,7 @@ function Ensure-WlanProfile {
 
     $null = netsh wlan show profile name="$Ssid"
     if ($LASTEXITCODE -eq 0) {
-        return
+        $null = netsh wlan delete profile name="$Ssid"
     }
 
     Write-Host "Creating temporary WLAN profile for '$Ssid'"
@@ -322,7 +322,7 @@ function Test-ConnectionStatus {
         $hasIp = $false
         try {
             $ipObj = Get-NetIPAddress -InterfaceAlias $Interface -AddressFamily IPv4 -ErrorAction Stop |
-                Where-Object { $_.IPAddress -and $_.IPAddress -ne '169.254.0.0' }
+                Where-Object { $_.IPAddress -and $_.IPAddress -notlike '169.254.*' }
             $hasIp = $null -ne $ipObj
         }
         catch {

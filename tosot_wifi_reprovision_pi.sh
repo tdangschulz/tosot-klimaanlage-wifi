@@ -3,12 +3,52 @@
 ENV_FILE="${ENV_FILE:-.env}"
 
 load_env_file() {
-    if [ -f "$ENV_FILE" ]; then
-        set -a
-        # shellcheck disable=SC1090
-        . "$ENV_FILE"
-        set +a
-    fi
+    local line key value
+    [ -f "$ENV_FILE" ] || return 0
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=${line%$'\r'}
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+
+        key=${line%%=*}
+        value=${line#*=}
+        key=$(printf '%s' "$key" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+
+        case "$key" in
+            ''|*[!A-Za-z0-9_]*)
+                continue
+                ;;
+        esac
+
+        if [ "${value#\'}" != "$value" ] && [ "${value%\'}" != "$value" ]; then
+            value=${value#\'}
+            value=${value%\'}
+        elif [ "${value#\"}" != "$value" ] && [ "${value%\"}" != "$value" ]; then
+            value=${value#\"}
+            value=${value%\"}
+        fi
+
+        printf -v "$key" '%s' "$value"
+        export "$key"
+    done < "$ENV_FILE"
+}
+
+has_usable_ipv4() {
+    local iface="$1"
+    local ip
+
+    ip=$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet / {sub(/\/.*/, "", $2); print $2; exit}')
+    case "${ip:-}" in
+        ''|169.254.*)
+            return 1
+            ;;
+    esac
+
+    printf '%s\n' "$ip"
+    return 0
 }
 
 load_env_file
@@ -237,7 +277,7 @@ check_connection_status() {
     for i in $(seq 1 "$timeout"); do
         state=$(wpa status 2>/dev/null | awk -F= '/^wpa_state=/{print $2; exit}')
         current_ssid=$(wpa status 2>/dev/null | awk -F= '/^ssid=/{print $2; exit}')
-        ip=$(ip -4 addr show "$WLAN_IFACE" 2>/dev/null | awk '/inet / {print $2; exit}')
+        ip=$(has_usable_ipv4 "$WLAN_IFACE" || true)
         ip=${ip:-no-ip}
 
         echo "[$i/$timeout] state=$state ssid=$current_ssid ip=$ip"
@@ -245,7 +285,7 @@ check_connection_status() {
         if [ "$state" = "COMPLETED" ] && [ "$current_ssid" = "$ssid" ]; then
             if [ "$ip" = "no-ip" ] && command -v dhclient >/dev/null 2>&1; then
                 dhclient -1 "$WLAN_IFACE" >/dev/null 2>&1 || true
-                ip=$(ip -4 addr show "$WLAN_IFACE" 2>/dev/null | awk '/inet / {print $2; exit}')
+                ip=$(has_usable_ipv4 "$WLAN_IFACE" || true)
                 ip=${ip:-no-ip}
             fi
 

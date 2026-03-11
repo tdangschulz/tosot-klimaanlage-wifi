@@ -215,4 +215,4 @@ sudo journalctl -u tosot-wifi-reprovision.service -f
 ||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.74
 ||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.57
 ||*.gree.com^$dnsrewrite=192.168.42.1,client=192.168.42.68
-``
+```
