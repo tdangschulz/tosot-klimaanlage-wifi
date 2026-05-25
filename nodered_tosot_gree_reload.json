@@ -4,13 +4,13 @@
         "type": "tab",
         "label": "Tosot Klimaanlage",
         "disabled": false,
-        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nVoraussetzungen:\n- HA_BASE_URL und HA_TOKEN als Node-RED Umgebungsvariablen gesetzt\n\nScript sendet: POST http://<nodered-ip>:1880/tosot-webhook\n  Body: {\"ssid\":\"c699e6bf\",\"ac\":\"Schlafzimmer\",\"ts\":\"2026-...\"}"
+        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nVoraussetzungen:\n- HA_BASE_URL und HA_TOKEN als Node-RED Umgebungsvariablen gesetzt\n\nDer http-in Node hat Pfad /tosot-webhook.\nDa Node-RED als HA Add-on läuft ist httpNodeRoot=/endpoint, daher lautet die echte URL:\n  http://<nodered-ip>:1880/endpoint/tosot-webhook\n\n.env auf dem Laptop:\n  HA_WEBHOOK_URL=http://192.168.42.x:1880/endpoint/tosot-webhook\n\nScript sendet: POST http://<nodered-ip>:1880/endpoint/tosot-webhook\n  Body: {\"ssid\":\"c699e6bf\",\"ac\":\"Schlafzimmer\",\"ts\":\"2026-...\"}"
     },
     {
         "id": "n-http-in",
         "type": "http in",
         "z": "tab-tosot",
-        "name": "POST /tosot-webhook",
+        "name": "POST /tosot-webhook  (extern: /endpoint/tosot-webhook)",
         "url": "/tosot-webhook",
         "method": "post",
         "upload": false,
