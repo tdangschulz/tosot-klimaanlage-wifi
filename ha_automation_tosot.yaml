@@ -1,0 +1,38 @@
+alias: Tosot - Gree Integration neuladen
+description: >
+  Wird vom Reprovision-Script getriggert nachdem eine Klimaanlage
+  erfolgreich neu ins WLAN eingebunden wurde.
+  Webhook-ID: tosot_reprovisioned
+  Script: HA_WEBHOOK_URL=https://heim.dangschulz.de:8123/api/webhook/tosot_reprovisioned
+
+trigger:
+  - platform: webhook
+    webhook_id: tosot_reprovisioned
+    allowed_methods:
+      - POST
+    local_only: false
+
+condition: []
+
+action:
+  - delay:
+      seconds: 20
+
+  # Gree Config Entries neuladen
+  # entity_id anpassen falls die Namen in deinem HA anders lauten:
+  # Einstellungen → Geräte & Dienste → Gree → Entitäten
+  - service: homeassistant.reload_config_entry
+    target:
+      entity_id:
+        - climate.buero
+        - climate.hobbyzimmer
+        - climate.schlafzimmer
+
+  # Optional: Benachrichtigung
+  # - service: notify.notify
+  #   data:
+  #     title: "Klimaanlage reprovisioned"
+  #     message: "Gree Integration wurde neugeladen ({{ trigger.json.ac }})"
+
+mode: single
+max_exceeded: silent
