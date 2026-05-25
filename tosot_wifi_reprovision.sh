@@ -545,6 +545,7 @@ while true; do
                 if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
                     verify_provisioning_success "$ap_ssid" || true
                 fi
+                reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
                 continue
             fi
 
@@ -565,6 +566,7 @@ while true; do
             else
                 echo ">>> ❌ Connection to $ap_name FAILED"
             fi
+            reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
         else
             echo ">>> 👻 $ap_name not visible"
         fi
@@ -572,8 +574,8 @@ while true; do
 
     if [ "$found_ap" = false ]; then
         echo ">>> 😴 No Gree APs visible → Waiting..."
-        reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
     fi
+    reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
 
     echo "----------------------------------------"
     echo "💤 Sleeping ${CHECK_INTERVAL}s until next scan..."
