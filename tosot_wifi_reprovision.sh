@@ -579,12 +579,12 @@ while true; do
                 echo ">>> ✅ Already connected to $ap_name → App-like provisioning"
                 ap_ip=$(detect_ap_ip "$WLAN_IFACE")
                 echo ">>> 🌐 Using AP IP: $ap_ip"
+                local _webhook_pending=false
                 if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
-                    if verify_provisioning_success "$ap_ssid"; then
-                        trigger_ha_webhook "$ap_ssid" "$ap_name" || true
-                    fi
+                    verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
                 fi
                 reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
+                [ "$_webhook_pending" = true ] && trigger_ha_webhook "$ap_ssid" "$ap_name" || true
                 continue
             fi
 
@@ -595,10 +595,9 @@ while true; do
                     echo ">>> 🎉 FULLY CONNECTED to $ap_name → App-like provisioning"
                     ap_ip=$(detect_ap_ip "$WLAN_IFACE")
                     echo ">>> 🌐 Using AP IP: $ap_ip"
+                    local _webhook_pending=false
                     if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
-                        if verify_provisioning_success "$ap_ssid"; then
-                            trigger_ha_webhook "$ap_ssid" "$ap_name" || true
-                        fi
+                        verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
                     fi
                     sleep 3
                 else
@@ -608,6 +607,7 @@ while true; do
                 echo ">>> ❌ Connection to $ap_name FAILED"
             fi
             reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
+            [ "${_webhook_pending:-false}" = true ] && trigger_ha_webhook "$ap_ssid" "$ap_name" || true
         else
             echo ">>> 👻 $ap_name not visible"
         fi
