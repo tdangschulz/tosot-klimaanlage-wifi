@@ -84,10 +84,8 @@ VERIFY_SCAN_INTERVAL="${VERIFY_SCAN_INTERVAL:-5}" # seconds between verification
 RECONNECT_ENABLED="${RECONNECT_ENABLED:-1}"      # reconnect to previous WiFi when no AP is visible
 RECONNECT_SSID="${RECONNECT_SSID:-}"             # optional explicit fallback WiFi SSID
 
-# Home Assistant integration reload after provisioning
-HA_URL="${HA_URL:-}"                             # e.g. http://192.168.42.100:8123
-HA_TOKEN="${HA_TOKEN:-}"                         # Long-lived access token
-HA_RELOAD_DELAY="${HA_RELOAD_DELAY:-20}"         # seconds to wait before reloading (AC needs time to connect)
+# Home Assistant: Webhook nach erfolgreichem Provisioning triggern
+HA_WEBHOOK_URL="${HA_WEBHOOK_URL:-}"             # z.B. http://192.168.42.100:8123/api/webhook/tosot_reprovisioned
 
 trap 'echo "🛑 Stopped."; exit 0' INT TERM
 
@@ -114,10 +112,8 @@ Options:
   --ap-ip-candidates "IP1 IP2"    AP IP fallback list (default: "192.168.1.1 192.168.0.1")
   --reconnect-ssid SSID           WiFi SSID to reconnect to when no AP is visible
   --no-reconnect                  Disable reconnect behavior
-  --ha-url URL                    Home Assistant base URL (e.g. http://192.168.42.100:8123)
-  --ha-token TOKEN                HA long-lived access token
-  --ha-reload-delay SEC           Wait before reloading HA integration (default: 20)
-  --no-ha-reload                  Disable HA integration reload
+  --ha-webhook-url URL            HA webhook URL to trigger after provisioning
+  --no-ha-webhook                 Disable HA webhook trigger
 
 Environment variables:
   ENV_FILE
@@ -135,9 +131,7 @@ Environment variables:
   AP_IP_CANDIDATES
   RECONNECT_ENABLED
   RECONNECT_SSID
-  HA_URL
-  HA_TOKEN
-  HA_RELOAD_DELAY
+  HA_WEBHOOK_URL
 
 Examples:
   ./tosot_wifi_reprovision.sh --help
@@ -198,20 +192,12 @@ parse_args() {
                 RECONNECT_ENABLED=0
                 shift 1
                 ;;
-            --ha-url)
-                HA_URL="$2"
+            --ha-webhook-url)
+                HA_WEBHOOK_URL="$2"
                 shift 2
                 ;;
-            --ha-token)
-                HA_TOKEN="$2"
-                shift 2
-                ;;
-            --ha-reload-delay)
-                HA_RELOAD_DELAY="$2"
-                shift 2
-                ;;
-            --no-ha-reload)
-                HA_URL=""
+            --no-ha-webhook)
+                HA_WEBHOOK_URL=""
                 shift 1
                 ;;
             *)
@@ -497,56 +483,27 @@ verify_provisioning_success() {
     return 1
 }
 
-reload_ha_gree_integration() {
-    if [ -z "${HA_URL:-}" ] || [ -z "${HA_TOKEN:-}" ]; then
+trigger_ha_webhook() {
+    local ap_ssid="$1"
+    local ap_name="$2"
+
+    if [ -z "${HA_WEBHOOK_URL:-}" ]; then
         return 0
     fi
 
-    if ! command -v jq >/dev/null 2>&1; then
-        echo ">>> ⚠️  jq nicht gefunden – HA-Reload übersprungen (sudo apt install jq)"
-        return 1
-    fi
+    local payload
+    payload="{\"ssid\":\"${ap_ssid}\",\"ac\":\"${ap_name}\",\"ts\":\"$(date --iso-8601=seconds)\"}"
 
-    if [ "${HA_RELOAD_DELAY:-0}" -gt 0 ]; then
-        echo ">>> ⏳ Warte ${HA_RELOAD_DELAY}s damit die AC ins WLAN verbinden kann..."
-        sleep "$HA_RELOAD_DELAY"
-    fi
-
-    echo ">>> 🏠 Lade Gree-Integration in Home Assistant neu..."
-
-    local entries
-    entries=$(curl -sf \
-        -H "Authorization: Bearer ${HA_TOKEN}" \
+    echo ">>> 🏠 Triggere HA Webhook für $ap_name..."
+    if curl -sf -X POST \
         -H "Content-Type: application/json" \
-        "${HA_URL}/api/config/config_entries" 2>/dev/null) || {
-        echo ">>> ❌ HA API nicht erreichbar (${HA_URL})"
-        return 1
-    }
-
-    local entry_ids
-    entry_ids=$(printf '%s' "$entries" | jq -r '.[] | select(.domain == "gree") | .entry_id' 2>/dev/null)
-
-    if [ -z "${entry_ids:-}" ]; then
-        echo ">>> ⚠️  Keine Gree-Einträge in HA gefunden"
+        -d "$payload" \
+        "${HA_WEBHOOK_URL}" >/dev/null 2>&1; then
+        echo ">>> ✅ Webhook gesendet"
+    else
+        echo ">>> ❌ Webhook fehlgeschlagen (${HA_WEBHOOK_URL})"
         return 1
     fi
-
-    local entry_id rc=0
-    while IFS= read -r entry_id; do
-        [ -z "$entry_id" ] && continue
-        echo ">>> 🔄 Lade Eintrag neu: $entry_id"
-        if curl -sf -X POST \
-            -H "Authorization: Bearer ${HA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "${HA_URL}/api/config/config_entries/entry/${entry_id}/reload" >/dev/null 2>&1; then
-            echo ">>> ✅ Neugeladen: $entry_id"
-        else
-            echo ">>> ❌ Fehler beim Neuladen: $entry_id"
-            rc=1
-        fi
-    done <<< "$entry_ids"
-
-    return $rc
 }
 
 # === MAIN INITIALIZATION ===
@@ -624,7 +581,7 @@ while true; do
                 echo ">>> 🌐 Using AP IP: $ap_ip"
                 if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
                     if verify_provisioning_success "$ap_ssid"; then
-                        reload_ha_gree_integration || true
+                        trigger_ha_webhook "$ap_ssid" "$ap_name" || true
                     fi
                 fi
                 reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
@@ -640,7 +597,7 @@ while true; do
                     echo ">>> 🌐 Using AP IP: $ap_ip"
                     if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
                         if verify_provisioning_success "$ap_ssid"; then
-                            reload_ha_gree_integration || true
+                            trigger_ha_webhook "$ap_ssid" "$ap_name" || true
                         fi
                     fi
                     sleep 3
