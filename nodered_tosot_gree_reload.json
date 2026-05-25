@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "Tosot Klimaanlage",
         "disabled": false,
-        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nVoraussetzungen:\n- HA_BASE_URL und HA_TOKEN als Node-RED Umgebungsvariablen gesetzt\n\nDer http-in Node hat Pfad /tosot-webhook.\nDa Node-RED als HA Add-on läuft ist httpNodeRoot=/endpoint, daher lautet die echte URL:\n  http://<nodered-ip>:1880/endpoint/tosot-webhook\n\n.env auf dem Laptop:\n  HA_WEBHOOK_URL=http://192.168.42.x:1880/endpoint/tosot-webhook\n\nScript sendet: POST http://<nodered-ip>:1880/endpoint/tosot-webhook\n  Body: {\"ssid\":\"c699e6bf\",\"ac\":\"Schlafzimmer\",\"ts\":\"2026-...\"}"
+        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nNode-RED Umgebungsvariablen (Einstellungen → Umgebungsvariablen):\n  HA_BASE_URL = https://heim.dangschulz.de:8123\n  HA_TOKEN    = <Long-lived Access Token aus HA Profil>\n\nDer http-in Node hat Pfad /tosot-webhook.\nDa Node-RED als HA Add-on läuft ist httpNodeRoot=/endpoint, daher lautet die echte URL:\n  http://192.168.42.63:1880/endpoint/tosot-webhook\n\n.env auf dem Laptop (Script):\n  HA_WEBHOOK_URL=http://192.168.42.63:1880/endpoint/tosot-webhook\n\nTest:\n  curl -X POST http://192.168.42.63:1880/endpoint/tosot-webhook \\\n    -H 'Content-Type: application/json' \\\n    -d '{\"ac\":\"Test\",\"ssid\":\"test\",\"ts\":\"2026-05-25\"}'"
     },
     {
         "id": "n-http-in",
