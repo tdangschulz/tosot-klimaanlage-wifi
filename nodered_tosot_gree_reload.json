@@ -4,33 +4,31 @@
         "type": "tab",
         "label": "Tosot Klimaanlage",
         "disabled": false,
-        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nVoraussetzungen:\n- node-red-contrib-home-assistant-websocket installiert\n- HA_BASE_URL und HA_TOKEN als Node-RED Umgebungsvariablen gesetzt\n- Webhook-ID 'tosot_reprovisioned' in HA Automation oder direkt\n\nScript sendet: POST /api/webhook/tosot_reprovisioned\n  Body: {\"ssid\":\"c699e6bf\",\"ac\":\"Schlafzimmer\",\"ts\":\"2026-...\"}"
+        "info": "Lädt die Gree-Integration in HA neu nachdem eine Klimaanlage reprovisioned wurde.\n\nVoraussetzungen:\n- HA_BASE_URL und HA_TOKEN als Node-RED Umgebungsvariablen gesetzt\n\nScript sendet: POST http://<nodered-ip>:1880/tosot-webhook\n  Body: {\"ssid\":\"c699e6bf\",\"ac\":\"Schlafzimmer\",\"ts\":\"2026-...\"}"
     },
     {
-        "id": "n-webhook",
-        "type": "ha-webhook",
+        "id": "n-http-in",
+        "type": "http in",
         "z": "tab-tosot",
-        "name": "Tosot Reprovisioned",
-        "server": "",
-        "version": 1,
-        "webhookId": "tosot_reprovisioned",
-        "outputProperties": [
-            {
-                "property": "payload",
-                "propertyType": "msg",
-                "value": "",
-                "valueType": "webhookData"
-            },
-            {
-                "property": "topic",
-                "propertyType": "msg",
-                "value": "tosot_reprovisioned",
-                "valueType": "str"
-            }
-        ],
-        "x": 140,
+        "name": "POST /tosot-webhook",
+        "url": "/tosot-webhook",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 150,
         "y": 100,
-        "wires": [["n-debug-trigger", "n-delay"]]
+        "wires": [["n-http-response", "n-debug-trigger", "n-delay"]]
+    },
+    {
+        "id": "n-http-response",
+        "type": "http response",
+        "z": "tab-tosot",
+        "name": "200 OK",
+        "statusCode": "200",
+        "headers": {},
+        "x": 350,
+        "y": 60,
+        "wires": []
     },
     {
         "id": "n-debug-trigger",
@@ -46,7 +44,7 @@
         "statusVal": "payload.ac",
         "statusType": "msg",
         "x": 360,
-        "y": 60,
+        "y": 100,
         "wires": []
     },
     {
@@ -67,7 +65,7 @@
         "allowrate": false,
         "outputs": 1,
         "x": 390,
-        "y": 100,
+        "y": 140,
         "wires": [["n-prepare-request"]]
     },
     {
@@ -75,14 +73,14 @@
         "type": "function",
         "z": "tab-tosot",
         "name": "Request vorbereiten",
-        "func": "const baseUrl = env.get('HA_BASE_URL') || 'http://homeassistant.local:8123';\nconst token  = env.get('HA_TOKEN');\n\nif (!token) {\n    node.error('HA_TOKEN Umgebungsvariable nicht gesetzt!');\n    return null;\n}\n\nmsg.url     = baseUrl + '/api/config/config_entries';\nmsg.method  = 'GET';\nmsg.headers = { 'Authorization': 'Bearer ' + token };\n\nmsg._haBaseUrl = baseUrl;\nmsg._haToken   = token;\nmsg._acPayload = msg.payload;\n\nreturn msg;",
+        "func": "const baseUrl = env.get('HA_BASE_URL') || 'http://homeassistant.local:8123';\nconst token  = env.get('HA_TOKEN');\n\nif (!token) {\n    node.error('HA_TOKEN Umgebungsvariable nicht gesetzt!');\n    return null;\n}\n\nmsg.url     = baseUrl + '/api/config/config_entries';\nmsg.method  = 'GET';\nmsg.headers = { 'Authorization': 'Bearer ' + token };\n\nmsg._haBaseUrl = baseUrl;\nmsg._haToken   = token;\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
         "x": 620,
-        "y": 100,
+        "y": 140,
         "wires": [["n-get-entries"]]
     },
     {
@@ -100,7 +98,7 @@
         "authType": "",
         "senderr": false,
         "x": 850,
-        "y": 100,
+        "y": 140,
         "wires": [["n-filter-gree"]]
     },
     {
@@ -108,14 +106,14 @@
         "type": "function",
         "z": "tab-tosot",
         "name": "Gree Einträge filtern + aufteilen",
-        "func": "const entries = msg.payload;\n\nif (!Array.isArray(entries)) {\n    node.error('HA API Fehler: ' + JSON.stringify(entries));\n    return null;\n}\n\nconst greeEntries = entries.filter(e => e.domain === 'gree');\n\nif (greeEntries.length === 0) {\n    node.warn('Keine Gree-Config-Einträge in HA gefunden');\n    return null;\n}\n\nnode.status({ fill:'blue', shape:'dot', text: greeEntries.length + ' Eintrag/Einträge' });\n\n// Einen msg pro Entry senden\nreturn [ greeEntries.map(entry => ({\n    ...msg,\n    payload:    null,\n    url:        msg._haBaseUrl + '/api/config/config_entries/entry/' + entry.entry_id + '/reload',\n    method:     'POST',\n    headers:    { 'Authorization': 'Bearer ' + msg._haToken, 'Content-Type': 'application/json' },\n    _entryId:   entry.entry_id,\n    _entryTitle: entry.title || entry.entry_id\n})) ];",
+        "func": "const entries = msg.payload;\n\nif (!Array.isArray(entries)) {\n    node.error('HA API Fehler: ' + JSON.stringify(entries));\n    return null;\n}\n\nconst greeEntries = entries.filter(e => e.domain === 'gree');\n\nif (greeEntries.length === 0) {\n    node.warn('Keine Gree-Config-Einträge in HA gefunden');\n    return null;\n}\n\nnode.status({ fill:'blue', shape:'dot', text: greeEntries.length + ' Eintrag/Einträge' });\n\n// Einen msg pro Entry senden\nreturn [ greeEntries.map(entry => ({\n    ...msg,\n    payload:     null,\n    url:         msg._haBaseUrl + '/api/config/config_entries/entry/' + entry.entry_id + '/reload',\n    method:      'POST',\n    headers:     { 'Authorization': 'Bearer ' + msg._haToken, 'Content-Type': 'application/json' },\n    _entryId:    entry.entry_id,\n    _entryTitle: entry.title || entry.entry_id\n})) ];",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
         "x": 1080,
-        "y": 100,
+        "y": 140,
         "wires": [["n-reload-entry"]]
     },
     {
@@ -133,7 +131,7 @@
         "authType": "",
         "senderr": false,
         "x": 1300,
-        "y": 100,
+        "y": 140,
         "wires": [["n-log-result"]]
     },
     {
@@ -148,7 +146,7 @@
         "finalize": "",
         "libs": [],
         "x": 1500,
-        "y": 100,
+        "y": 140,
         "wires": [["n-debug-result"]]
     },
     {
@@ -165,7 +163,7 @@
         "statusVal": "payload.status",
         "statusType": "msg",
         "x": 1680,
-        "y": 100,
+        "y": 140,
         "wires": []
     }
 ]
