@@ -586,8 +586,9 @@ while true; do
                 ap_ip=$(detect_ap_ip "$WLAN_IFACE")
                 echo ">>> 🌐 Using AP IP: $ap_ip"
                 local _webhook_pending=false
-                send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip" || true
-                verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
+                if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
+                    verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
+                fi
                 reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
                 [ "$_webhook_pending" = true ] && trigger_ha_webhook "$ap_ssid" "$ap_name" || true
                 continue
@@ -601,8 +602,9 @@ while true; do
                     ap_ip=$(detect_ap_ip "$WLAN_IFACE")
                     echo ">>> 🌐 Using AP IP: $ap_ip"
                     local _webhook_pending=false
-                    send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip" || true
-                    verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
+                    if send_configuration "$TARGET_SSID" "$TARGET_PSW" "$ap_ip"; then
+                        verify_provisioning_success "$ap_ssid" && _webhook_pending=true || true
+                    fi
                     reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
                     sleep 3
                 else
