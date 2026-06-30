@@ -1,7 +1,8 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-ENV_FILE="${ENV_FILE:-.env}"
+SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
 
 load_env_file() {
     local line key value
