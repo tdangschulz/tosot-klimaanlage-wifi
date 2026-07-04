@@ -63,6 +63,7 @@ RECONNECT_SSID="${RECONNECT_SSID:-}"
 HA_WEBHOOK_URL="${HA_WEBHOOK_URL:-}"
 
 _TEMP_WPA_CONF=""
+_TEMP_DHCP_PID=""
 
 trap '_cleanup; echo "Stopped."; exit 0' INT TERM
 
@@ -195,11 +196,15 @@ is_ap_visible() {
 }
 
 _kill_temp_wpa() {
+    # Only kill wpa_supplicant we started via temp config
     if [ -n "$_TEMP_WPA_CONF" ]; then
-        pkill -f "wpa_supplicant.*$_TEMP_WPA_CONF" 2>/dev/null || true
+        pkill -f "wpa_supplicant.*$(basename "$_TEMP_WPA_CONF")" 2>/dev/null || true
     fi
-    # Also kill any dhcpcd we started on the interface
-    pkill -f "dhcpcd.*$WLAN_IFACE" 2>/dev/null || true
+    # Only kill the dhcpcd instance we started (tracked by PID)
+    if [ -n "$_TEMP_DHCP_PID" ] && kill -0 "$_TEMP_DHCP_PID" 2>/dev/null; then
+        kill "$_TEMP_DHCP_PID" 2>/dev/null || true
+    fi
+    _TEMP_DHCP_PID=""
     sleep 1
 }
 
@@ -222,8 +227,11 @@ connect_to_ap() {
     wpa_supplicant -B -i "$WLAN_IFACE" -D nl80211 -c "$_TEMP_WPA_CONF" >/dev/null 2>&1 || \
     wpa_supplicant -B -i "$WLAN_IFACE" -D wext    -c "$_TEMP_WPA_CONF" >/dev/null 2>&1
 
-    # Request IP
-    dhcpcd -1 -t 20 "$WLAN_IFACE" >/dev/null 2>&1 || true
+    # Request IP — track PID so we only kill our own dhcpcd instance later
+    dhcpcd -1 -t 20 "$WLAN_IFACE" >/dev/null 2>&1 &
+    _TEMP_DHCP_PID=$!
+    wait "$_TEMP_DHCP_PID" 2>/dev/null || true
+    _TEMP_DHCP_PID=""
     return 0
 }
 
@@ -440,7 +448,11 @@ while true; do
 
     [ "$found_ap" = false ] && echo ">>> No Gree APs visible → Waiting..."
 
-    reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
+    # Only reconnect if we drifted off the home network (e.g. after provisioning)
+    _cur=$(get_current_connection)
+    if [ "$_cur" != "$RECONNECT_SSID" ] && [ -n "$RECONNECT_SSID" ]; then
+        reconnect_to_fallback_wifi "$RECONNECT_SSID" "$WLAN_IFACE" || true
+    fi
     echo "----------------------------------------"
     echo "Sleeping ${CHECK_INTERVAL}s..."
     sleep "$CHECK_INTERVAL"
